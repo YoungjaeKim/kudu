@@ -20,12 +20,13 @@ namespace Kudu.Core.Functions
                 if (hostJson["masterKey"]?.Type == JTokenType.String)
                 {
                     key = hostJson.Value<string>("masterKey");
-                    return false;
+                    return false; // always unencrypted(version 0)
                 }
                 else if (hostJson["masterKey"]?.Type == JTokenType.Object)
                 {
-                    key = hostJson.Value<JObject>("masterKey").Value<string>("value");
-                    return true;
+                    JObject keyObject = hostJson.Value<JObject>("masterKey");
+                    key = keyObject.Value<string>("value");
+                    return keyObject.Value<bool>("encrypted");
                 }
 
             }

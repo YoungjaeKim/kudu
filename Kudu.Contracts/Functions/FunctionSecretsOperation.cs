@@ -22,22 +22,26 @@ namespace Kudu.Core.Functions
                 if (hostJson["key"]?.Type == JTokenType.String)
                 {
                     key = hostJson.Value<string>("key");
-                    return false;
+                    return false; // always unencrypted (version 0)
                 }
                 else if (hostJson["keys"]?.Type == JTokenType.Array)
                 {
                     JArray keys = hostJson.Value<JArray>("keys");
                     if (keys.Count >= 1)
                     {
-                        key = keys[0].Value<string>("value");
+                        JObject keyObject = (JObject)keys[0];
                         for (int i = 1; i < keys.Count; i++)
                         {
+                            // start from the second
+                            // if we can't find the key named default, return the 1st key found
                             if (String.Equals(keys[i].Value<string>("name"), "default"))
                             {
-                                key = keys[i].Value<string>("value");
+                                keyObject = (JObject)keys[i];
+                                break;
                             }
                         }
-                        return true;
+                        key = keyObject.Value<string>("value");
+                        return keyObject.Value<bool>("encrypted");
                     }
                 }
             }
