@@ -1,4 +1,6 @@
-﻿using System;
+﻿using Microsoft.AspNetCore.DataProtection;
+using Microsoft.Azure.Web.DataProtection;
+using System;
 using System.Security.Cryptography;
 
 namespace Kudu.Core.Infrastructure
@@ -11,11 +13,26 @@ namespace Kudu.Core.Infrastructure
             {
                 byte[] data = new byte[40];
                 rng.GetBytes(data);
-                string secret = Convert.ToBase64String(data);
-
+                String secret = Convert.ToBase64String(data);
                 // Replace pluses as they are problematic as URL values
                 return secret.Replace('+', 'a');
             }
         }
+
+        public static string EncryptSecretString(string content)
+        {
+            var provider = DataProtectionProvider.CreateAzureDataProtector();
+            var protector = provider.CreateProtector("function-secrets");
+            return protector.Protect(content);
+        }
+
+        public static string DecryptSecretString(string content)
+        {
+            var provider = DataProtectionProvider.CreateAzureDataProtector();
+            var protector = provider.CreateProtector("function-secrets");
+            return protector.Unprotect(content);
+        }
+
     }
 }
+

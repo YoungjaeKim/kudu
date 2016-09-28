@@ -1,13 +1,13 @@
-﻿using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Threading.Tasks;
-using Kudu.Contracts.Tracing;
+﻿using Kudu.Contracts.Tracing;
 using Kudu.Core.Infrastructure;
 using Kudu.Core.Tracing;
-using Newtonsoft.Json.Linq;
-using System.Linq;
 using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using System.Threading.Tasks;
 
 namespace Kudu.Core.Functions
 {
@@ -30,7 +30,7 @@ namespace Kudu.Core.Functions
                 if (!IsFunctionsSiteExtensionEnabled)
                 {
                     tracer.Trace("Functions are not enabled for this site.");
-                    return; 
+                    return;
                 }
 
                 var jwt = System.Environment.GetEnvironmentVariable(Constants.SiteRestrictedJWT);
@@ -53,7 +53,7 @@ namespace Kudu.Core.Functions
 
         private static bool IsFunctionsSiteExtensionEnabled
         {
-            get 
+            get
             {
                 var functionVersion = System.Environment.GetEnvironmentVariable("FUNCTIONS_EXTENSION_VERSION");
                 return !String.IsNullOrEmpty(functionVersion) &&
@@ -186,34 +186,35 @@ namespace Kudu.Core.Functions
             return config;
         }
 
-        public async Task<FunctionSecrets> GetFunctionSecretsAsync(string functionName)
+        private async Task<Object> KeyOpHelper<T>(string name, T keyOp) where T : IKeyOperation
         {
-            FunctionSecrets secrets;
-            string secretFilePath = GetFunctionSecretsFilePath(functionName);
-            if (FileSystemHelpers.FileExists(secretFilePath))
+            string keyPath = GetFunctionSecretsFilePath(name);
+            string key = null;
+            if (FileSystemHelpers.FileExists(keyPath))
             {
-                // load the secrets file
-                string secretsJson = await FileSystemHelpers.ReadAllTextFromFileAsync(secretFilePath);
-                secrets = JsonConvert.DeserializeObject<FunctionSecrets>(secretsJson);
+                string jsonStr = await FileSystemHelpers.ReadAllTextFromFileAsync(keyPath);
+                if (keyOp.GetKeyInString(jsonStr, out key))
+                {
+                    key = SecurityUtility.DecryptSecretString(key);
+                }
             }
             else
             {
-                // initialize with new secrets and save it
-                secrets = new FunctionSecrets
-                {
-                    Key = SecurityUtility.GenerateSecretString()
-                };
-
-                FileSystemHelpers.EnsureDirectory(Path.GetDirectoryName(secretFilePath));
-                await FileSystemHelpers.WriteAllTextToFileAsync(secretFilePath, JsonConvert.SerializeObject(secrets, Formatting.Indented));
+                FileSystemHelpers.EnsureDirectory(Path.GetDirectoryName(keyPath));
+                key = SecurityUtility.GenerateSecretString();
+                await FileSystemHelpers.WriteAllTextToFileAsync(keyPath, keyOp.GenerateKeyJson(SecurityUtility.EncryptSecretString(key)).ToString(Formatting.Indented));
             }
+            return keyOp.ReturnKeyObject(key, name);
+        }
 
-            secrets.TriggerUrl = String.Format(@"https://{0}/api/{1}?code={2}",
-                System.Environment.GetEnvironmentVariable("WEBSITE_HOSTNAME") ?? "localhost",
-                functionName,
-                secrets.Key);
+        public async Task<MasterKey> GetMasterKeyAsync()
+        {
+            return (MasterKey)await KeyOpHelper("host", new MasterKeyOperation());
+        }
 
-            return secrets;
+        public async Task<FunctionSecrets> GetFunctionSecretsAsync(string functionName)
+        {
+            return (FunctionSecrets)await KeyOpHelper(functionName, new FunctionSecretsOperation());
         }
 
         public async Task<JObject> GetHostConfigAsync()
