@@ -4,25 +4,29 @@ using System;
 
 namespace Kudu.Core.Functions
 {
-    public class FunctionSecretsOperation : IKeyOperation
+    public class FunctionSecretsJsonOps : IKeyJsonOps<FunctionSecrets>
     {
-        // have the schema related info enclosed in this class
-        public JObject GenerateKeyJson(string functionKey)
+        public int GetKeyNumbers()
         {
-            JObject hostJson = JObject.Parse($"{{\"keys\":[{{\"name\":\"default\",\"value\":\"{functionKey}\",\"encrypted\": true }}]}}");
-            return hostJson;
+            return 1;
         }
 
-        public bool GetKeyInString(string json, out string key)
+        // have the schema related info enclosed in this class
+        public string GenerateKeyJson(Tuple<string,string>[] keyPair, out string unencryptedKey)
+        {
+            unencryptedKey = keyPair[0].Item1;
+            return JObject.Parse($"{{\"keys\":[{{\"name\":\"default\",\"value\":\"{keyPair[0].Item2}\",\"encrypted\": true }}]}}").ToString(Formatting.Indented);
+        }
+
+        public string GetKeyInString(string json, out bool isEncrypted)
         {
             try
             {
-                key = null;
                 JObject hostJson = JObject.Parse(json);
                 if (hostJson["key"]?.Type == JTokenType.String)
                 {
-                    key = hostJson.Value<string>("key");
-                    return false; // always unencrypted (version 0)
+                    isEncrypted = false;
+                    return hostJson.Value<string>("key");
                 }
                 else if (hostJson["keys"]?.Type == JTokenType.Array)
                 {
@@ -40,8 +44,8 @@ namespace Kudu.Core.Functions
                                 break;
                             }
                         }
-                        key = keyObject.Value<string>("value");
-                        return keyObject.Value<bool>("encrypted");
+                        isEncrypted = keyObject.Value<bool>("encrypted");
+                        return keyObject.Value<string>("value");
                     }
                 }
             }
@@ -50,13 +54,13 @@ namespace Kudu.Core.Functions
                 // all parse issue ==> format exception
                 throw new FormatException("Invalid secrets file format.");
             }
-            return false;
+            isEncrypted = false;
+            return null;
         }
 
-        public Object ReturnKeyObject(string functionKey, string functionName)
+        public FunctionSecrets GenerateKeyObject(string functionKey, string functionName)
         {
-            // cast later
-            return JsonConvert.DeserializeObject<FunctionSecrets>($"{{\"key\":\"{functionKey}\",\"trigger_url\":\"{String.Format(@"https://{0}/api/{1}?code={2}", System.Environment.GetEnvironmentVariable("WEBSITE_HOSTNAME") ?? "localhost", functionName, functionKey)}\"}}");
+            return new FunctionSecrets { Key = functionKey, TriggerUrl = String.Format(@"https://{0}/api/{1}?code={2}", System.Environment.GetEnvironmentVariable("WEBSITE_HOSTNAME") ?? "localhost", functionName, functionKey) };
         }
     }
 }

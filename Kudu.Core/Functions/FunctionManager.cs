@@ -186,14 +186,16 @@ namespace Kudu.Core.Functions
             return config;
         }
 
-        private async Task<Object> KeyOpHelper<T>(string name, T keyOp) where T : IKeyOperation
+        private async Task<T> KeyOpHelper<T>(string name, IKeyJsonOps<T> keyOp)
         {
             string keyPath = GetFunctionSecretsFilePath(name);
             string key = null;
             if (FileSystemHelpers.FileExists(keyPath))
             {
                 string jsonStr = await FileSystemHelpers.ReadAllTextFromFileAsync(keyPath);
-                if (keyOp.GetKeyInString(jsonStr, out key))
+                bool isEncrypted;
+                key = keyOp.GetKeyInString(jsonStr, out isEncrypted);
+                if (isEncrypted)
                 {
                     key = SecurityUtility.DecryptSecretString(key);
                 }
@@ -201,20 +203,19 @@ namespace Kudu.Core.Functions
             else
             {
                 FileSystemHelpers.EnsureDirectory(Path.GetDirectoryName(keyPath));
-                key = SecurityUtility.GenerateSecretString();
-                await FileSystemHelpers.WriteAllTextToFileAsync(keyPath, keyOp.GenerateKeyJson(SecurityUtility.EncryptSecretString(key)).ToString(Formatting.Indented));
+                await FileSystemHelpers.WriteAllTextToFileAsync(keyPath, keyOp.GenerateKeyJson(SecurityUtility.GenerateSecretStringsKeyPair(keyOp.GetKeyNumbers()),out key));
             }
-            return keyOp.ReturnKeyObject(key, name);
+            return keyOp.GenerateKeyObject(key, name);
         }
 
         public async Task<MasterKey> GetMasterKeyAsync()
         {
-            return (MasterKey)await KeyOpHelper("host", new MasterKeyOperation());
+            return await KeyOpHelper<MasterKey>("host", new MasterKeyJsonOps());
         }
 
         public async Task<FunctionSecrets> GetFunctionSecretsAsync(string functionName)
         {
-            return (FunctionSecrets)await KeyOpHelper(functionName, new FunctionSecretsOperation());
+            return await KeyOpHelper<FunctionSecrets>(functionName, new FunctionSecretsJsonOps());
         }
 
         public async Task<JObject> GetHostConfigAsync()

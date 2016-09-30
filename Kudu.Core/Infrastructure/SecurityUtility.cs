@@ -7,30 +7,35 @@ namespace Kudu.Core.Infrastructure
 {
     public static class SecurityUtility
     {
-        public static string GenerateSecretString()
+        private static string GenerateSecretString()
         {
             using (var rng = RandomNumberGenerator.Create())
             {
                 byte[] data = new byte[40];
                 rng.GetBytes(data);
-                String secret = Convert.ToBase64String(data);
+                string secret = Convert.ToBase64String(data);
                 // Replace pluses as they are problematic as URL values
                 return secret.Replace('+', 'a');
             }
         }
 
-        public static string EncryptSecretString(string content)
+        public static Tuple<string, string>[] GenerateSecretStringsKeyPair(int number)
         {
-            var provider = DataProtectionProvider.CreateAzureDataProtector();
-            var protector = provider.CreateProtector("function-secrets");
-            return protector.Protect(content);
+            var unencryptedToEncryptedKeyPair = new Tuple<string, string>[number];
+            var protector = DataProtectionProvider.CreateAzureDataProtector().CreateProtector(_defaultProtectorStr);
+            for (int i = 0; i < number; i++)
+            {
+                string unencryptedKey = GenerateSecretString();
+                unencryptedToEncryptedKeyPair[i] = new Tuple<string, string>(unencryptedKey, protector.Protect(unencryptedKey));
+            }
+            return unencryptedToEncryptedKeyPair;
         }
+
+        private const string _defaultProtectorStr = "function-secrets";
 
         public static string DecryptSecretString(string content)
         {
-            var provider = DataProtectionProvider.CreateAzureDataProtector();
-            var protector = provider.CreateProtector("function-secrets");
-            return protector.Unprotect(content);
+            return DataProtectionProvider.CreateAzureDataProtector().CreateProtector(_defaultProtectorStr).Unprotect(content);
         }
 
     }
