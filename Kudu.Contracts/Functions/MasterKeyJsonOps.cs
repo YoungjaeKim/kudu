@@ -6,15 +6,15 @@ namespace Kudu.Core.Functions
 {
     public class MasterKeyJsonOps : IKeyJsonOps<MasterKey>
     {
-        public int GetKeyNumbers()
+        public int RequireKeyCount()
         {
             return 2;
         }
 
-        public string GenerateKeyJson(Tuple<string,string>[] keyPair, out string unencryptedKey)
+        public string GenerateKeyUglyJson(Tuple<string,string>[] keyPair, out string unencryptedKey)
         {
             unencryptedKey = keyPair[0].Item1;
-            return JObject.Parse($"{{\"masterKey\":{{\"name\":\"master\",\"value\":\"{keyPair[0].Item2}\",\"encrypted\": true }},\"functionKeys\":[{{\"name\": \"default\",\"value\": \"{keyPair[1].Item2}\",\"encrypted\": true}}]}}").ToString(Formatting.Indented);
+            return $"{{\"masterKey\":{{\"name\":\"master\",\"value\":\"{keyPair[0].Item2}\",\"encrypted\": true }},\"functionKeys\":[{{\"name\": \"default\",\"value\": \"{keyPair[1].Item2}\",\"encrypted\": true}}]}}";
         }
 
         public string GetKeyInString(string json, out bool isEncrypted)

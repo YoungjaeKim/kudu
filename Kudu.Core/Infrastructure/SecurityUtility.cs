@@ -7,6 +7,8 @@ namespace Kudu.Core.Infrastructure
 {
     public static class SecurityUtility
     {
+        private const string DefaultProtectorPurpose = "function-secrets";
+
         private static string GenerateSecretString()
         {
             using (var rng = RandomNumberGenerator.Create())
@@ -22,7 +24,7 @@ namespace Kudu.Core.Infrastructure
         public static Tuple<string, string>[] GenerateSecretStringsKeyPair(int number)
         {
             var unencryptedToEncryptedKeyPair = new Tuple<string, string>[number];
-            var protector = DataProtectionProvider.CreateAzureDataProtector().CreateProtector(_defaultProtectorStr);
+            var protector = DataProtectionProvider.CreateAzureDataProtector().CreateProtector(DefaultProtectorPurpose);
             for (int i = 0; i < number; i++)
             {
                 string unencryptedKey = GenerateSecretString();
@@ -31,11 +33,10 @@ namespace Kudu.Core.Infrastructure
             return unencryptedToEncryptedKeyPair;
         }
 
-        private const string _defaultProtectorStr = "function-secrets";
-
         public static string DecryptSecretString(string content)
         {
-            return DataProtectionProvider.CreateAzureDataProtector().CreateProtector(_defaultProtectorStr).Unprotect(content);
+            var protector = DataProtectionProvider.CreateAzureDataProtector().CreateProtector(DefaultProtectorPurpose);
+            return protector.Unprotect(content);
         }
 
     }

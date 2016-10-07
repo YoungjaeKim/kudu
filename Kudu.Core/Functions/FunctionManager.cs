@@ -203,10 +203,17 @@ namespace Kudu.Core.Functions
             else
             {
                 FileSystemHelpers.EnsureDirectory(Path.GetDirectoryName(keyPath));
-                await FileSystemHelpers.WriteAllTextToFileAsync(keyPath, keyOp.GenerateKeyJson(SecurityUtility.GenerateSecretStringsKeyPair(keyOp.GetKeyNumbers()),out key));
+                string jsonContent = keyOp.GenerateKeyUglyJson(SecurityUtility.GenerateSecretStringsKeyPair(keyOp.RequireKeyCount()), out key);
+                using (var sw = new StringWriter())
+                using (var sr = new System.IO.StringReader(jsonContent))
+                {
+                    new JsonTextWriter(sw) { Formatting = Formatting.Indented }.WriteToken(new JsonTextReader(sr));
+                    await FileSystemHelpers.WriteAllTextToFileAsync(keyPath, sw.ToString());
+                }
             }
             return keyOp.GenerateKeyObject(key, name);
         }
+
 
         public async Task<MasterKey> GetMasterKeyAsync()
         {

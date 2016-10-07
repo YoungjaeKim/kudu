@@ -6,16 +6,16 @@ namespace Kudu.Core.Functions
 {
     public class FunctionSecretsJsonOps : IKeyJsonOps<FunctionSecrets>
     {
-        public int GetKeyNumbers()
+        public int RequireKeyCount()
         {
             return 1;
         }
 
         // have the schema related info enclosed in this class
-        public string GenerateKeyJson(Tuple<string,string>[] keyPair, out string unencryptedKey)
+        public string GenerateKeyUglyJson(Tuple<string,string>[] keyPair, out string unencryptedKey)
         {
             unencryptedKey = keyPair[0].Item1;
-            return JObject.Parse($"{{\"keys\":[{{\"name\":\"default\",\"value\":\"{keyPair[0].Item2}\",\"encrypted\": true }}]}}").ToString(Formatting.Indented);
+            return $"{{\"keys\":[{{\"name\":\"default\",\"value\":\"{keyPair[0].Item2}\",\"encrypted\": true }}]}}";
         }
 
         public string GetKeyInString(string json, out bool isEncrypted)
@@ -60,7 +60,10 @@ namespace Kudu.Core.Functions
 
         public FunctionSecrets GenerateKeyObject(string functionKey, string functionName)
         {
-            return new FunctionSecrets { Key = functionKey, TriggerUrl = String.Format(@"https://{0}/api/{1}?code={2}", System.Environment.GetEnvironmentVariable("WEBSITE_HOSTNAME") ?? "localhost", functionName, functionKey) };
+            return new FunctionSecrets {
+                Key = functionKey,
+                TriggerUrl = String.Format(@"https://{0}/api/{1}?code={2}", System.Environment.GetEnvironmentVariable("WEBSITE_HOSTNAME") ?? "localhost", functionName, functionKey)
+            };
         }
     }
 }
