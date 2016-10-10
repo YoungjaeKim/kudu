@@ -222,7 +222,9 @@ namespace Kudu.Core.Functions
 
         public async Task<FunctionSecrets> GetFunctionSecretsAsync(string functionName)
         {
-            return await KeyOpHelper<FunctionSecrets>(functionName, new FunctionSecretsJsonOps());
+            // host.json already exists, because function app is a prerequisit
+            string hostString = await FileSystemHelpers.ReadAllTextFromFileAsync(GetFunctionSecretsFilePath("host"));
+            return await KeyOpHelper<FunctionSecrets>(functionName, new FunctionSecretsJsonOps { HostString = hostString});
         }
 
         public async Task<JObject> GetHostConfigAsync()

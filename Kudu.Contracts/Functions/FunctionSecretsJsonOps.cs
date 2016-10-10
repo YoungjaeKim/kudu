@@ -6,6 +6,7 @@ namespace Kudu.Core.Functions
 {
     public class FunctionSecretsJsonOps : IKeyJsonOps<FunctionSecrets>
     {
+        public string HostString { get; set; }
         public int RequireKeyCount()
         {
             return 1;
@@ -15,7 +16,16 @@ namespace Kudu.Core.Functions
         public string GenerateKeyUglyJson(Tuple<string,string>[] keyPair, out string unencryptedKey)
         {
             unencryptedKey = keyPair[0].Item1;
-            return $"{{\"keys\":[{{\"name\":\"default\",\"value\":\"{keyPair[0].Item2}\",\"encrypted\": true }}]}}";
+            switch (MasterKeyJsonOps.GetVersion(JObject.Parse(this.HostString)))
+            {
+                case 0:
+                    return $"{{\"key\":\"{unencryptedKey}\"}}";
+                case 1:
+                    return $"{{\"keys\":[{{\"name\":\"default\",\"value\":\"{keyPair[0].Item2}\",\"encrypted\": true }}]}}";
+                default:
+                    throw new FormatException("Invalid secrets file format.");
+            }
+            
         }
 
         public string GetKeyInString(string json, out bool isEncrypted)
