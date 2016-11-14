@@ -14,6 +14,7 @@ using Kudu.Services.Arm;
 using Kudu.Services.Filters;
 using Newtonsoft.Json.Linq;
 using Environment = System.Environment;
+using System.Text.RegularExpressions;
 
 namespace Kudu.Services.Functions
 {
@@ -24,6 +25,7 @@ namespace Kudu.Services.Functions
         private readonly IFunctionManager _manager;
         private readonly ITraceFactory _traceFactory;
         private readonly IEnvironment _environment;
+        private static readonly Regex FunctionNameValidationRegex = new Regex(@"^[a-z][a-z0-9_\-]{0,127}$(?<!^host$)", RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
         public FunctionController(IFunctionManager manager, ITraceFactory traceFactory, IEnvironment environment)
         {
@@ -46,6 +48,12 @@ namespace Kudu.Services.Functions
 
         private async Task<HttpResponseMessage> CreateOrUpdateHelper(string name, Task<FunctionEnvelope> functionEnvelopeBuilder)
         {
+            if (!FunctionNameValidationRegex.IsMatch(name))
+            {
+                // it returns the same error object if the PUT request does not come from Arm
+                return ArmUtils.CreateErrorResponse(Request, HttpStatusCode.BadRequest, new ArgumentException($"{name} is not a valid function name"));
+            }
+
             var tracer = _traceFactory.GetTracer();
             using (tracer.Step($"FunctionsController.CreateOrUpdate({name})"))
             {
@@ -87,6 +95,16 @@ namespace Kudu.Services.Functions
             }
         }
 
+        [HttpGet]
+        public async Task<HttpResponseMessage> GetMasterKey()
+        {
+            var tracer = _traceFactory.GetTracer();
+            using (tracer.Step("FunctionsController.GetMasterKey()"))
+            {
+                return Request.CreateResponse(HttpStatusCode.OK, await _manager.GetMasterKeyAsync());
+            }
+        }
+
         [HttpPost]
         public async Task<HttpResponseMessage> GetSecrets(string name)
         {
@@ -103,7 +121,7 @@ namespace Kudu.Services.Functions
             var tracer = _traceFactory.GetTracer();
             using (tracer.Step($"FunctionsController.Delete({name})"))
             {
-                _manager.DeleteFunction(name);
+                _manager.DeleteFunction(name, ignoreErrors: false);
 
                 // Fire and forget SyncTrigger request.
                 FireSyncTriggers(tracer);
@@ -139,7 +157,9 @@ namespace Kudu.Services.Functions
             using (tracer.Step("FunctionController.SyncTriggers"))
             {
                 await _manager.SyncTriggersAsync();
-                return Request.CreateResponse(HttpStatusCode.OK);
+
+                // Return a dummy body to make it valid in ARM template action evaluation
+                return Request.CreateResponse(HttpStatusCode.OK, new { status = "success" });
             }
         }
 

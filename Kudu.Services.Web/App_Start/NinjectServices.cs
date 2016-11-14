@@ -519,11 +519,14 @@ namespace Kudu.Services.Web.App_Start
             routes.MapHttpRoute("get-functions-host-settings", "api/functions/config", new { controller = "Function", action = "GetHostSettings" }, new { verb = new HttpMethodConstraint("GET") });
             routes.MapHttpRoute("put-functions-host-settings", "api/functions/config", new { controller = "Function", action = "PutHostSettings" }, new { verb = new HttpMethodConstraint("PUT") });
             routes.MapHttpRoute("api-sync-functions", "api/functions/synctriggers", new { controller = "Function", action = "SyncTriggers" }, new { verb = new HttpMethodConstraint("POST") });
+            // This route only needed for temporary workaround. Will yank when /syncfunctionapptriggers is supported in ARM
+            routes.MapHttpRoute("api-sync-functions-tmphack", "functions/listsynctriggers", new { controller = "Function", action = "SyncTriggers" }, new { verb = new HttpMethodConstraint("POST") });
             routes.MapHttpRoute("put-function", "api/functions/{name}", new { controller = "Function", action = "CreateOrUpdate" }, new { verb = new HttpMethodConstraint("PUT") });
             routes.MapHttpRoute("list-functions", "api/functions", new { controller = "Function", action = "List" }, new { verb = new HttpMethodConstraint("GET") });
             routes.MapHttpRoute("get-function", "api/functions/{name}", new { controller = "Function", action = "Get" }, new { verb = new HttpMethodConstraint("GET") });
             // TODO: remove obsolete getsecrets route once consumer switches to listsecrets
             routes.MapHttpRoute("list-secrets", "api/functions/{name}/listsecrets", new { controller = "Function", action = "GetSecrets" }, new { verb = new HttpMethodConstraint("POST") });
+            routes.MapHttpRoute("get-masterkey", "api/functions/admin/masterkey", new { controller = "Function", action = "GetMasterKey" }, new { verb = new HttpMethodConstraint("GET") });
             routes.MapHttpRoute("delete-function", "api/functions/{name}", new { controller = "Function", action = "Delete" }, new { verb = new HttpMethodConstraint("DELETE") });
 
             // catch all unregistered url to properly handle not found
@@ -623,13 +626,18 @@ namespace Kudu.Services.Web.App_Start
 
         private static ITracer GetTracerWithoutContext(IEnvironment environment, IDeploymentSettingsManager settings)
         {
-            TraceLevel level = settings.GetTraceLevel();
-            if (level > TraceLevel.Off)
+            // when file system has issue, this can throw (environment.TracePath calls EnsureDirectory).
+            // prefer no-op tracer over outage.
+            return OperationManager.SafeExecute(() =>
             {
-                return new XmlTracer(environment.TracePath, level);
-            }
+                TraceLevel level = settings.GetTraceLevel();
+                if (level > TraceLevel.Off)
+                {
+                    return new XmlTracer(environment.TracePath, level);
+                }
 
-            return NullTracer.Instance;
+                return NullTracer.Instance;
+            }) ?? NullTracer.Instance;
         }
 
         private static void TraceShutdown(IEnvironment environment, IDeploymentSettingsManager settings)
